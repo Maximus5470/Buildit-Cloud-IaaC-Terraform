@@ -152,13 +152,13 @@ variable "enable_detailed_monitoring" {
 variable "peak_schedule_start" {
   description = "Cron expression for when to scale up to peak (UTC)"
   type        = string
-  default     = "0 0 * * 1-6"  # 00:00 UTC Monday-Saturday
+  default     = "30 4 * * 1-6"  # 04:00 UTC Monday-Saturday (9:30 AM IST)
 }
 
 variable "peak_schedule_end" {
   description = "Cron expression for when to scale down from peak (UTC)"
   type        = string
-  default     = "0 8 * * 1-6"  # 08:00 UTC Monday-Saturday (8 hours later)
+  default     = "30 11 * * 1-6"  # 11:30 UTC Monday-Saturday (5:00 PM IST)
 }
 
 variable "enable_nat_gateway" {

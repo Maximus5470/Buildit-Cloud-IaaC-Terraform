@@ -281,6 +281,16 @@ resource "aws_security_group_rule" "web_egress_nlb" {
   security_group_id = aws_security_group.web.id
 }
 
+resource "aws_security_group_rule" "web_egress_elasticache" {
+  type                     = "egress"
+  from_port                = 6379
+  to_port                  = 6379
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.elasticache.id
+  description              = "To ElastiCache for job queue and results"
+  security_group_id        = aws_security_group.web.id
+}
+
 resource "aws_security_group_rule" "web_egress_https" {
   type              = "egress"
   from_port         = 443
@@ -312,16 +322,6 @@ resource "aws_security_group_rule" "turbo_egress_elasticache" {
   security_group_id        = aws_security_group.turbo.id
 }
 
-resource "aws_security_group_rule" "turbo_egress_rds" {
-  type                     = "egress"
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.rds.id
-  description              = "To RDS"
-  security_group_id        = aws_security_group.turbo.id
-}
-
 resource "aws_security_group_rule" "turbo_egress_https" {
   type              = "egress"
   from_port         = 443
@@ -343,16 +343,6 @@ resource "aws_security_group_rule" "rds_ingress_web" {
   security_group_id        = aws_security_group.rds.id
 }
 
-resource "aws_security_group_rule" "rds_ingress_turbo" {
-  type                     = "ingress"
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.turbo.id
-  description              = "PostgreSQL from Turbo EC2"
-  security_group_id        = aws_security_group.rds.id
-}
-
 resource "aws_security_group_rule" "rds_egress_all" {
   type              = "egress"
   from_port         = 0
@@ -364,24 +354,24 @@ resource "aws_security_group_rule" "rds_egress_all" {
 }
 
 # ElastiCache Rules
+resource "aws_security_group_rule" "elasticache_ingress_web" {
+  type                     = "ingress"
+  from_port                = 6379
+  to_port                  = 6379
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.web.id
+  description              = "Valkey from Web EC2 for job queue"
+  security_group_id        = aws_security_group.elasticache.id
+}
+
 resource "aws_security_group_rule" "elasticache_ingress_turbo" {
   type                     = "ingress"
   from_port                = 6379
   to_port                  = 6379
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.turbo.id
-  description              = "Valkey from Turbo EC2 only"
+  description              = "Valkey from Turbo EC2 for job processing"
   security_group_id        = aws_security_group.elasticache.id
-}
-
-resource "aws_security_group_rule" "elasticache_egress_all" {
-  type              = "egress"
-  from_port         = 0
-  to_port           = 0
-  protocol          = "-1"
-  cidr_blocks       = ["0.0.0.0/0"]
-  description       = "No outbound required"
-  security_group_id = aws_security_group.elasticache.id
 }
 
 # ============================================================================
@@ -646,6 +636,16 @@ resource "aws_launch_template" "turbo" {
 
   vpc_security_group_ids = [aws_security_group.turbo.id]
 
+  # Spot Instance Configuration (cost-optimized for execution workloads)
+  instance_market_options {
+    market_type = "spot"
+    spot_options {
+      spot_instance_type             = "one-time"
+      instance_interruption_behavior = "terminate"
+      max_price                      = ""  # Use on-demand price as max (default)
+    }
+  }
+
   block_device_mappings {
     device_name = "/dev/xvda"
 
@@ -663,15 +663,12 @@ resource "aws_launch_template" "turbo" {
 
   user_data = base64encode(<<-EOF
               #!/bin/bash
-              yum update -y
-              # Install execution runtime dependencies
-              yum install -y python3 docker
-              systemctl start docker
-              systemctl enable docker
-              # Placeholder for execution service
+              # Custom AMI already contains all compilers and interpreters
+              # Minimal bootstrap for instance identification
               mkdir -p /opt/turbo
               INSTANCE_ID=$(ec2-metadata --instance-id | cut -d " " -f 2)
               echo "Turbo Execution Node $INSTANCE_ID" > /opt/turbo/info.txt
+              # Start your execution service here if needed
               EOF
   )
 
