@@ -2,7 +2,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 4.0"
+      version = "~> 5.0"
     }
   }
 }
@@ -79,7 +79,7 @@ resource "aws_subnet" "db" {
 # NAT Gateway for private subnets (optional outbound internet)
 resource "aws_eip" "nat" {
   count = var.enable_nat_gateway ? length(var.availability_zones) : 0
-  vpc   = true
+  domain = "vpc"
 
   tags = {
     Name = "${var.project_name}-nat-eip-${count.index + 1}"
