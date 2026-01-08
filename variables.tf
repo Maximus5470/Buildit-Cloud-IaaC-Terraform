@@ -95,15 +95,16 @@ variable "db_name" {
 }
 
 variable "db_username" {
-  description = "Master username for RDS"
+  description = "Master username for RDS (only needed for initial setup)"
   type        = string
-  default     = "buildit_admin"
+  default     = ""  # Only needed for initial setup, then stored in Secrets Manager
   sensitive   = true
 }
 
 variable "db_password" {
-  description = "Master password for RDS"
+  description = "Master password for RDS (only needed for initial setup)"
   type        = string
+  default     = ""  # Only needed for initial setup, then stored in Secrets Manager
   sensitive   = true
 }
 
@@ -180,4 +181,16 @@ variable "tags" {
     Environment = "production"
     ManagedBy   = "terraform"
   }
+}
+
+variable "alert_email" {
+  description = "Email address for CloudWatch alarm notifications"
+  type        = string
+  default     = ""
+}
+
+variable "enable_cloudwatch_dashboard" {
+  description = "Enable CloudWatch monitoring dashboard (Free tier: First 3 dashboards are free)"
+  type        = bool
+  default     = true
 }

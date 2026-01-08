@@ -66,3 +66,18 @@ output "nlb_url" {
   description = "URL to access the turbo execution service"
   value       = "http://${aws_lb.nlb.dns_name}:${var.turbo_execution_port}"
 }
+
+output "db_credentials_secret_arn" {
+  description = "ARN of the Secrets Manager secret for DB credentials"
+  value       = aws_secretsmanager_secret.db_credentials.arn
+}
+
+output "cloudwatch_dashboard_url" {
+  description = "URL to the CloudWatch monitoring dashboard"
+  value       = "https://${var.aws_region}.console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#dashboards:name=${var.project_name}-monitoring"
+}
+
+output "sns_topic_arn" {
+  description = "ARN of the SNS topic for alerts"
+  value       = aws_sns_topic.alerts.arn
+}
