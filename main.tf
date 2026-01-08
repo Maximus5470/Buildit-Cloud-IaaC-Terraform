@@ -508,7 +508,7 @@ data "aws_ami" "amazon_linux_2023" {
 
   filter {
     name   = "name"
-    values = ["al2023-ami-*-arm64"]
+    values = ["al2023-ami-*-x86_64"]
   }
 
   filter {
@@ -758,7 +758,7 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_db_instance" "main" {
   identifier     = "${var.project_name}-postgres"
   engine         = "postgres"
-  engine_version = "15.4"
+  engine_version = "15.15"
   instance_class = var.db_instance_class
 
   allocated_storage     = 20
