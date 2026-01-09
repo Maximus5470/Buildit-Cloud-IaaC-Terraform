@@ -78,7 +78,7 @@ resource "aws_subnet" "db" {
 
 # NAT Gateway for private subnets (optional outbound internet)
 resource "aws_eip" "nat" {
-  count = var.enable_nat_gateway ? length(var.availability_zones) : 0
+  count  = var.enable_nat_gateway ? length(var.availability_zones) : 0
   domain = "vpc"
 
   tags = {
@@ -386,7 +386,7 @@ resource "aws_lb" "alb" {
   subnets            = aws_subnet.public[*].id
 
   enable_deletion_protection = false
-  enable_http2              = true
+  enable_http2               = true
 
   tags = {
     Name = "${var.project_name}-alb"
@@ -435,7 +435,7 @@ resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.alb.arn
   port              = 443
   protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"  # TLS 1.2 and 1.3
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06" # TLS 1.2 and 1.3
   certificate_arn   = var.acm_certificate_arn
 
   default_action {
@@ -580,14 +580,14 @@ resource "aws_launch_template" "web" {
 
 # Auto Scaling Group for Web EC2
 resource "aws_autoscaling_group" "web" {
-  name                = "${var.project_name}-web-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.web.arn]
-  health_check_type   = "ELB"
+  name                      = "${var.project_name}-web-asg"
+  vpc_zone_identifier       = aws_subnet.private[*].id
+  target_group_arns         = [aws_lb_target_group.web.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
-  min_size            = var.web_instance_count_min
-  max_size            = var.web_instance_count_max
-  desired_capacity    = var.web_instance_count_desired
+  min_size                  = var.web_instance_count_min
+  max_size                  = var.web_instance_count_max
+  desired_capacity          = var.web_instance_count_desired
 
   launch_template {
     id      = aws_launch_template.web.id
@@ -650,7 +650,7 @@ resource "aws_launch_template" "turbo" {
     spot_options {
       spot_instance_type             = "one-time"
       instance_interruption_behavior = "terminate"
-      max_price                      = ""  # Use on-demand price as max (default)
+      max_price                      = "" # Use on-demand price as max (default)
     }
   }
 
@@ -699,14 +699,14 @@ resource "aws_launch_template" "turbo" {
 
 # Auto Scaling Group for Turbo EC2
 resource "aws_autoscaling_group" "turbo" {
-  name                = "${var.project_name}-turbo-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.turbo.arn]
-  health_check_type   = "ELB"
+  name                      = "${var.project_name}-turbo-asg"
+  vpc_zone_identifier       = aws_subnet.private[*].id
+  target_group_arns         = [aws_lb_target_group.turbo.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
-  min_size            = var.turbo_instance_count_min
-  max_size            = var.turbo_instance_count_max
-  desired_capacity    = var.turbo_instance_count_desired
+  min_size                  = var.turbo_instance_count_min
+  max_size                  = var.turbo_instance_count_max
+  desired_capacity          = var.turbo_instance_count_desired
 
   launch_template {
     id      = aws_launch_template.turbo.id
@@ -781,10 +781,10 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
 
-  multi_az               = true
-  publicly_accessible    = false
+  multi_az                = true
+  publicly_accessible     = false
   backup_retention_period = 30
-  skip_final_snapshot    = true
+  skip_final_snapshot     = true
 
   tags = {
     Name = "${var.project_name}-rds"
@@ -822,7 +822,7 @@ resource "aws_elasticache_replication_group" "main" {
 
   # Encryption at rest (strongly recommended - defense in depth)
   at_rest_encryption_enabled = true
-  kms_key_id                 = null  # Use AWS-managed key
+  kms_key_id                 = null # Use AWS-managed key
 
   subnet_group_name  = aws_elasticache_subnet_group.main.name
   security_group_ids = [aws_security_group.elasticache.id]
@@ -868,8 +868,8 @@ resource "aws_iam_role" "ec2_secrets_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "ec2.amazonaws.com" }
     }]
   })
@@ -1398,898 +1398,121 @@ resource "aws_cloudwatch_metric_alarm" "nat_error_port_allocation" {
 }
 
 # ----------------------------------------------------------------------------
-# CloudWatch Dashboard - Comprehensive Production Monitoring
+# CloudWatch Dashboards - Separated by Area of Concern
 # ----------------------------------------------------------------------------
 
-resource "aws_cloudwatch_dashboard" "main" {
+locals {
+  all_alarm_arns = concat([
+    aws_cloudwatch_metric_alarm.alb_5xx.arn,
+    aws_cloudwatch_metric_alarm.alb_4xx.arn,
+    aws_cloudwatch_metric_alarm.alb_target_5xx.arn,
+    aws_cloudwatch_metric_alarm.alb_latency.arn,
+    aws_cloudwatch_metric_alarm.alb_rejected_connections.arn,
+    aws_cloudwatch_metric_alarm.web_unhealthy.arn,
+    aws_cloudwatch_metric_alarm.web_healthy_count_low.arn,
+    aws_cloudwatch_metric_alarm.turbo_unhealthy.arn,
+    aws_cloudwatch_metric_alarm.rds_cpu.arn,
+    aws_cloudwatch_metric_alarm.rds_cpu_critical.arn,
+    aws_cloudwatch_metric_alarm.rds_storage.arn,
+    aws_cloudwatch_metric_alarm.rds_storage_critical.arn,
+    aws_cloudwatch_metric_alarm.rds_connections.arn,
+    aws_cloudwatch_metric_alarm.rds_read_latency.arn,
+    aws_cloudwatch_metric_alarm.rds_write_latency.arn,
+    aws_cloudwatch_metric_alarm.rds_freeable_memory.arn,
+    aws_cloudwatch_metric_alarm.elasticache_cpu.arn,
+    aws_cloudwatch_metric_alarm.elasticache_memory.arn,
+    aws_cloudwatch_metric_alarm.elasticache_evictions.arn,
+    aws_cloudwatch_metric_alarm.elasticache_replication_lag.arn,
+    aws_cloudwatch_metric_alarm.web_asg_cpu_high.arn,
+    aws_cloudwatch_metric_alarm.turbo_asg_cpu_high.arn
+  ], var.enable_nat_gateway ? [aws_cloudwatch_metric_alarm.nat_error_port_allocation[0].arn] : [])
+}
+
+# Dashboard 1: Application Layer (ALB + Web ASG)
+resource "aws_cloudwatch_dashboard" "application" {
   count          = var.enable_cloudwatch_dashboard ? 1 : 0
-  dashboard_name = "${var.project_name}-monitoring"
+  dashboard_name = "${var.project_name}-application"
 
   dashboard_body = jsonencode({
     widgets = [
-      # ========================================================================
-      # ROW 0: KEY METRICS AT A GLANCE (NUMBER WIDGETS)
-      # ========================================================================
-      {
-        type   = "metric"
-        x      = 0
-        y      = 0
-        width  = 6
-        height = 3
-        properties = {
-          metrics = [
-            ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", aws_lb.alb.arn_suffix, { stat = "Sum" }]
-          ]
-          view    = "singleValue"
-          region  = var.aws_region
-          title   = "Total Requests (5min)"
-          period  = 300
-        }
-      },
-      {
-        type   = "metric"
-        x      = 6
-        y      = 0
-        width  = 6
-        height = 3
-        properties = {
-          metrics = [
-            ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", aws_lb.alb.arn_suffix, { stat = "Average" }]
-          ]
-          view    = "singleValue"
-          region  = var.aws_region
-          title   = "Avg Response Time (sec)"
-          period  = 300
-        }
-      },
-      {
-        type   = "metric"
-        x      = 12
-        y      = 0
-        width  = 6
-        height = 3
-        properties = {
-          metrics = [
-            ["AWS/ApplicationELB", "HealthyHostCount", "TargetGroup", aws_lb_target_group.web.arn_suffix, "LoadBalancer", aws_lb.alb.arn_suffix, { stat = "Average", label = "Healthy" }]
-          ]
-          view    = "singleValue"
-          region  = var.aws_region
-          title   = "Healthy Web Targets"
-          period  = 60
-        }
-      },
-      {
-        type   = "metric"
-        x      = 18
-        y      = 0
-        width  = 6
-        height = 3
-        properties = {
-          metrics = [
-            ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average" }]
-          ]
-          view    = "singleValue"
-          region  = var.aws_region
-          title   = "Active DB Connections"
-          period  = 300
-        }
-      },
-      # ALARM STATUS WIDGET
-      {
-        type   = "alarm"
-        x      = 0
-        y      = 3
-        width  = 24
-        height = 3
-        properties = {
-          title  = "🚨 Active Alarms"
-          alarms = [
-            aws_cloudwatch_metric_alarm.alb_5xx.arn,
-            aws_cloudwatch_metric_alarm.alb_target_5xx.arn,
-            aws_cloudwatch_metric_alarm.web_unhealthy.arn,
-            aws_cloudwatch_metric_alarm.rds_cpu_critical.arn,
-            aws_cloudwatch_metric_alarm.rds_storage_critical.arn,
-            aws_cloudwatch_metric_alarm.web_healthy_count_low.arn
-          ]
-        }
-      },
-      # ========================================================================
-      # ROW 1: APPLICATION LOAD BALANCER OVERVIEW
-      # ========================================================================
-      {
-        type   = "metric"
-        x      = 0
-        y      = 6
-        width  = 8
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", aws_lb.alb.arn_suffix, { stat = "Sum", label = "Total Requests" }]
-          ]
-          view    = "timeSeries"
-          stacked = false
-          region  = var.aws_region
-          title   = "ALB - Total Request Volume"
-          period  = 300
-          yAxis = {
-            left = { min = 0 }
-          }
-        }
-      },
-      {
-        type   = "metric"
-        x      = 8
-        y      = 6
-        width  = 8
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/ApplicationELB", "HTTPCode_ELB_5XX_Count", "LoadBalancer", aws_lb.alb.arn_suffix, { stat = "Sum", label = "ALB 5XX", color = "#d62728" }],
-            [".", "HTTPCode_Target_5XX_Count", ".", ".", { stat = "Sum", label = "Target 5XX", color = "#ff7f0e" }],
-            [".", "HTTPCode_ELB_4XX_Count", ".", ".", { stat = "Sum", label = "ALB 4XX", color = "#ffbb78" }],
-            [".", "HTTPCode_Target_4XX_Count", ".", ".", { stat = "Sum", label = "Target 4XX", color = "#98df8a" }]
-          ]
-          view    = "timeSeries"
-          stacked = true
-          region  = var.aws_region
-          title   = "ALB - HTTP Error Codes (Stacked)"
-          period  = 300
-          yAxis = {
-            left = { min = 0 }
-          }
-        }
-      },
-      {
-        type   = "metric"
-        x      = 16
-        y      = 6
-        width  = 8
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", aws_lb.alb.arn_suffix, { stat = "Average", label = "Avg Latency" }],
-            ["...", { stat = "p50", label = "p50" }],
-            ["...", { stat = "p90", label = "p90" }],
-            ["...", { stat = "p99", label = "p99" }]
-          ]
-          view    = "timeSeries"
-          stacked = false
-          region  = var.aws_region
-          title   = "ALB - Response Time (seconds)"
-          period  = 300
-          yAxis = {
-            left = { min = 0 }
-          }
-        }
-      },
-      # ========================================================================
-      # ROW 2: ALB TARGET HEALTH & CONNECTIONS
-      # ========================================================================
-      {
-        type   = "metric"
-        x      = 0
-        y      = 12
-        width  = 6
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/ApplicationELB", "HealthyHostCount", "TargetGroup", aws_lb_target_group.web.arn_suffix, "LoadBalancer", aws_lb.alb.arn_suffix, { stat = "Average" }]
-          ]
-          view    = "singleValue"
-          region  = var.aws_region
-          title   = "Healthy Web Hosts"
-          period  = 60
-          setPeriodToTimeRange = false
-        }
-      },
-      {
-        type   = "metric"
-        x      = 6
-        y      = 12
-        width  = 6
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/ApplicationELB", "UnHealthyHostCount", "TargetGroup", aws_lb_target_group.web.arn_suffix, "LoadBalancer", aws_lb.alb.arn_suffix, { stat = "Average" }]
-          ]
-          view    = "singleValue"
-          region  = var.aws_region
-          title   = "Unhealthy Web Hosts"
-          period  = 60
-          setPeriodToTimeRange = false
-        }
-      },
-      {
-        type   = "metric"
-        x      = 12
-        y      = 12
-        width  = 12
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/ApplicationELB", "ActiveConnectionCount", "LoadBalancer", aws_lb.alb.arn_suffix, { stat = "Sum", label = "Active Connections" }],
-            [".", "NewConnectionCount", ".", ".", { stat = "Sum", label = "New Connections" }],
-            [".", "RejectedConnectionCount", ".", ".", { stat = "Sum", label = "Rejected", color = "#d62728" }]
-          ]
-          view    = "timeSeries"
-          stacked = true
-          region  = var.aws_region
-          title   = "ALB - Connection Metrics (Stacked)"
-          period  = 300
-          yAxis = {
-            left = { min = 0 }
-          }
-        }
-      },
-      # ========================================================================
-      # ROW 3: EC2 AUTO SCALING GROUPS
-      # ========================================================================
-      {
-        type   = "metric"
-        x      = 0
-        y      = 18
-        width  = 6
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/EC2", "CPUUtilization", "AutoScalingGroupName", aws_autoscaling_group.web.name, { stat = "Average" }]
-          ]
-          view    = "singleValue"
-          region  = var.aws_region
-          title   = "Web ASG - Avg CPU %"
-          period  = 300
-        }
-      },
-      {
-        type   = "metric"
-        x      = 6
-        y      = 18
-        width  = 6
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/EC2", "CPUUtilization", "AutoScalingGroupName", aws_autoscaling_group.turbo.name, { stat = "Average" }]
-          ]
-          view    = "singleValue"
-          region  = var.aws_region
-          title   = "Turbo ASG - Avg CPU %"
-          period  = 300
-        }
-      },
-      {
-        type   = "metric"
-        x      = 12
-        y      = 18
-        width  = 12
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/EC2", "CPUUtilization", "AutoScalingGroupName", aws_autoscaling_group.web.name, { stat = "Average", label = "Web ASG - Avg CPU", color = "#1f77b4" }],
-            ["...", { stat = "Maximum", label = "Web ASG - Max CPU", color = "#aec7e8" }],
-            ["AWS/EC2", "CPUUtilization", "AutoScalingGroupName", aws_autoscaling_group.turbo.name, { stat = "Average", label = "Turbo ASG - Avg CPU", color = "#ff7f0e" }],
-            ["...", { stat = "Maximum", label = "Turbo ASG - Max CPU", color = "#ffbb78" }]
-          ]
-          view    = "timeSeries"
-          stacked = false
-          region  = var.aws_region
-          title   = "EC2 - CPU Utilization by ASG"
-          period  = 300
-          yAxis = {
-            left = { min = 0, max = 100 }
-          }
-        }
-      },
-      {
-        type   = "metric"
-        x      = 0
-        y      = 24
-        width  = 12
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/EC2", "NetworkIn", "AutoScalingGroupName", aws_autoscaling_group.web.name, { stat = "Sum", label = "Web - Network In" }],
-            [".", "NetworkOut", ".", ".", { stat = "Sum", label = "Web - Network Out" }]
-          ]
-          view    = "timeSeries"
-          stacked = true
-          region  = var.aws_region
-          title   = "Web EC2 - Network Traffic (Stacked)"
-          period  = 300
-          yAxis = {
-            left = { min = 0 }
-          }
-        }
-      },
-      {
-        type   = "metric"
-        x      = 12
-        y      = 24
-        width  = 12
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/EC2", "NetworkIn", "AutoScalingGroupName", aws_autoscaling_group.turbo.name, { stat = "Sum", label = "Turbo - Network In" }],
-            [".", "NetworkOut", ".", ".", { stat = "Sum", label = "Turbo - Network Out" }]
-          ]
-          view    = "timeSeries"
-          stacked = true
-          region  = var.aws_region
-          title   = "Turbo EC2 - Network Traffic (Stacked)"
-          period  = 300
-          yAxis = {
-            left = { min = 0 }
-          }
-        }
-      },
-      # ========================================================================
-      # ROW 4: RDS DATABASE PERFORMANCE - NUMBER WIDGETS & GRAPHS
-      # ========================================================================
-      {
-        type   = "metric"
-        x      = 0
-        y      = 30
-        width  = 6
-        height = 3
-        properties = {
-          metrics = [
-            ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average" }]
-          ]
-          view    = "singleValue"
-          region  = var.aws_region
-          title   = "RDS CPU %"
-          period  = 300
-        }
-      },
-      {
-        type   = "metric"
-        x      = 6
-        y      = 30
-        width  = 6
-        height = 3
-        properties = {
-          metrics = [
-            ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average" }]
-          ]
-          view    = "singleValue"
-          region  = var.aws_region
-          title   = "DB Connections"
-          period  = 300
-        }
-      },
-      {
-        type   = "metric"
-        x      = 12
-        y      = 30
-        width  = 6
-        height = 3
-        properties = {
-          metrics = [
-            ["AWS/RDS", "FreeStorageSpace", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average" }]
-          ]
-          view    = "singleValue"
-          region  = var.aws_region
-          title   = "Free Storage (bytes)"
-          period  = 300
-        }
-      },
-      {
-        type   = "metric"
-        x      = 18
-        y      = 30
-        width  = 6
-        height = 3
-        properties = {
-          metrics = [
-            ["AWS/RDS", "FreeableMemory", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average" }]
-          ]
-          view    = "singleValue"
-          region  = var.aws_region
-          title   = "Free Memory (bytes)"
-          period  = 300
-        }
-      },
-      {
-        type   = "metric"
-        x      = 0
-        y      = 33
-        width  = 8
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average", label = "CPU %" }]
-          ]
-          view    = "timeSeries"
-          stacked = false
-          region  = var.aws_region
-          title   = "RDS - CPU Utilization"
-          period  = 300
-          yAxis = {
-            left = { min = 0, max = 100 }
-          }
-        }
-      },
-      {
-        type   = "metric"
-        x      = 8
-        y      = 33
-        width  = 8
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average", label = "Active Connections" }]
-          ]
-          view    = "timeSeries"
-          stacked = false
-          region  = var.aws_region
-          title   = "RDS - Database Connections"
-          period  = 300
-          yAxis = {
-            left = { min = 0 }
-          }
-        }
-      },
-      {
-        type   = "metric"
-        x      = 16
-        y      = 33
-        width  = 8
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/RDS", "FreeableMemory", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average", label = "Freeable Memory" }]
-          ]
-          view    = "timeSeries"
-          stacked = false
-          region  = var.aws_region
-          title   = "RDS - Freeable Memory (bytes)"
-          period  = 300
-          yAxis = {
-            left = { min = 0 }
-          }
-        }
-      },
-      # ========================================================================
-      # ROW 5: RDS STORAGE & IOPS
-      # ========================================================================
-      {
-        type   = "metric"
-        x      = 0
-        y      = 39
-        width  = 8
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/RDS", "FreeStorageSpace", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average", label = "Free Storage" }]
-          ]
-          view    = "timeSeries"
-          stacked = false
-          region  = var.aws_region
-          title   = "RDS - Free Storage Space (bytes)"
-          period  = 300
-          yAxis = {
-            left = { min = 0 }
-          }
-        }
-      },
-      {
-        type   = "metric"
-        x      = 8
-        y      = 39
-        width  = 8
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/RDS", "ReadIOPS", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average", label = "Read IOPS", color = "#1f77b4" }],
-            [".", "WriteIOPS", ".", ".", { stat = "Average", label = "Write IOPS", color = "#ff7f0e" }]
-          ]
-          view    = "timeSeries"
-          stacked = true
-          region  = var.aws_region
-          title   = "RDS - Read/Write IOPS (Stacked)"
-          period  = 300
-          yAxis = {
-            left = { min = 0 }
-          }
-        }
-      },
-      {
-        type   = "metric"
-        x      = 16
-        y      = 39
-        width  = 8
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/RDS", "ReadLatency", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average", label = "Read Latency" }],
-            [".", "WriteLatency", ".", ".", { stat = "Average", label = "Write Latency" }]
-          ]
-          view    = "timeSeries"
-          stacked = false
-          region  = var.aws_region
-          title   = "RDS - Read/Write Latency (seconds)"
-          period  = 300
-          yAxis = {
-            left = { min = 0 }
-          }
-        }
-      },
-      # ========================================================================
-      # ROW 6: RDS THROUGHPUT & TRANSACTION LOGS
-      # ========================================================================
-      {
-        type   = "metric"
-        x      = 0
-        y      = 45
-        width  = 12
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/RDS", "ReadThroughput", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average", label = "Read Throughput", color = "#2ca02c" }],
-            [".", "WriteThroughput", ".", ".", { stat = "Average", label = "Write Throughput", color = "#d62728" }]
-          ]
-          view    = "timeSeries"
-          stacked = true
-          region  = var.aws_region
-          title   = "RDS - Throughput (bytes/sec, Stacked)"
-          period  = 300
-          yAxis = {
-            left = { min = 0 }
-          }
-        }
-      },
-      {
-        type   = "metric"
-        x      = 12
-        y      = 45
-        width  = 12
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/RDS", "TransactionLogsDiskUsage", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average", label = "Transaction Logs Disk Usage" }]
-          ]
-          view    = "timeSeries"
-          stacked = false
-          region  = var.aws_region
-          title   = "RDS - Transaction Logs Disk Usage (MB)"
-          period  = 300
-          yAxis = {
-            left = { min = 0 }
-          }
-        }
-      },
-      # ========================================================================
-      # ROW 7: ELASTICACHE PERFORMANCE - NUMBER WIDGETS & GRAPHS
-      # ========================================================================
-      {
-        type   = "metric"
-        x      = 0
-        y      = 51
-        width  = 6
-        height = 3
-        properties = {
-          metrics = [
-            ["AWS/ElastiCache", "CPUUtilization", "CacheClusterId", "${aws_elasticache_replication_group.main.replication_group_id}-001", { stat = "Average" }]
-          ]
-          view    = "singleValue"
-          region  = var.aws_region
-          title   = "ElastiCache CPU %"
-          period  = 300
-        }
-      },
-      {
-        type   = "metric"
-        x      = 6
-        y      = 51
-        width  = 6
-        height = 3
-        properties = {
-          metrics = [
-            ["AWS/ElastiCache", "DatabaseMemoryUsagePercentage", "CacheClusterId", "${aws_elasticache_replication_group.main.replication_group_id}-001", { stat = "Average" }]
-          ]
-          view    = "singleValue"
-          region  = var.aws_region
-          title   = "Memory Usage %"
-          period  = 300
-        }
-      },
-      {
-        type   = "metric"
-        x      = 12
-        y      = 51
-        width  = 6
-        height = 3
-        properties = {
-          metrics = [
-            ["AWS/ElastiCache", "CacheHitRate", "CacheClusterId", "${aws_elasticache_replication_group.main.replication_group_id}-001", { stat = "Average" }]
-          ]
-          view    = "singleValue"
-          region  = var.aws_region
-          title   = "Cache Hit Rate %"
-          period  = 300
-        }
-      },
-      {
-        type   = "metric"
-        x      = 18
-        y      = 51
-        width  = 6
-        height = 3
-        properties = {
-          metrics = [
-            ["AWS/ElastiCache", "Evictions", "CacheClusterId", "${aws_elasticache_replication_group.main.replication_group_id}-001", { stat = "Sum" }]
-          ]
-          view    = "singleValue"
-          region  = var.aws_region
-          title   = "Evictions (5min)"
-          period  = 300
-        }
-      },
-      {
-        type   = "metric"
-        x      = 0
-        y      = 54
-        width  = 8
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/ElastiCache", "CPUUtilization", "CacheClusterId", "${aws_elasticache_replication_group.main.replication_group_id}-001", { stat = "Average", label = "CPU %" }]
-          ]
-          view    = "timeSeries"
-          stacked = false
-          region  = var.aws_region
-          title   = "ElastiCache - CPU Utilization"
-          period  = 300
-          yAxis = {
-            left = { min = 0, max = 100 }
-          }
-        }
-      },
-      {
-        type   = "metric"
-        x      = 8
-        y      = 54
-        width  = 8
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/ElastiCache", "DatabaseMemoryUsagePercentage", "CacheClusterId", "${aws_elasticache_replication_group.main.replication_group_id}-001", { stat = "Average", label = "Memory Usage %" }]
-          ]
-          view    = "timeSeries"
-          stacked = false
-          region  = var.aws_region
-          title   = "ElastiCache - Memory Usage"
-          period  = 300
-          yAxis = {
-            left = { min = 0, max = 100 }
-          }
-        }
-      },
-      {
-        type   = "metric"
-        x      = 16
-        y      = 54
-        width  = 8
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/ElastiCache", "NetworkBytesIn", "CacheClusterId", "${aws_elasticache_replication_group.main.replication_group_id}-001", { stat = "Average", label = "Network In", color = "#1f77b4" }],
-            [".", "NetworkBytesOut", ".", ".", { stat = "Average", label = "Network Out", color = "#ff7f0e" }]
-          ]
-          view    = "timeSeries"
-          stacked = true
-          region  = var.aws_region
-          title   = "ElastiCache - Network Traffic (Stacked)"
-          period  = 300
-          yAxis = {
-            left = { min = 0 }
-          }
-        }
-      },
-      # ========================================================================
-      # ROW 8: ELASTICACHE OPERATIONS & EVICTIONS
-      # ========================================================================
-      {
-        type   = "metric"
-        x      = 0
-        y      = 60
-        width  = 12
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/ElastiCache", "CacheHits", "CacheClusterId", "${aws_elasticache_replication_group.main.replication_group_id}-001", { stat = "Sum", label = "Cache Hits", color = "#2ca02c" }],
-            [".", "CacheMisses", ".", ".", { stat = "Sum", label = "Cache Misses", color = "#d62728" }]
-          ]
-          view    = "timeSeries"
-          stacked = true
-          region  = var.aws_region
-          title   = "ElastiCache - Cache Hits vs Misses (Stacked)"
-          period  = 300
-          yAxis = {
-            left = { min = 0 }
-          }
-        }
-      },
-      {
-        type   = "metric"
-        x      = 12
-        y      = 60
-        width  = 6
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/ElastiCache", "Evictions", "CacheClusterId", "${aws_elasticache_replication_group.main.replication_group_id}-001", { stat = "Sum", label = "Evictions" }]
-          ]
-          view    = "timeSeries"
-          stacked = false
-          region  = var.aws_region
-          title   = "ElastiCache - Evictions"
-          period  = 300
-          yAxis = {
-            left = { min = 0 }
-          }
-        }
-      },
-      {
-        type   = "metric"
-        x      = 18
-        y      = 60
-        width  = 6
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/ElastiCache", "ReplicationLag", "CacheClusterId", "${aws_elasticache_replication_group.main.replication_group_id}-001", { stat = "Average", label = "Replication Lag (sec)" }]
-          ]
-          view    = "timeSeries"
-          stacked = false
-          region  = var.aws_region
-          title   = "ElastiCache - Replication Lag"
-          period  = 60
-          yAxis = {
-            left = { min = 0 }
-          }
-        }
-      },
-      # ========================================================================
-      # ROW 9: NETWORK LOAD BALANCER (NLB) FOR TURBO EXECUTION
-      # ========================================================================
-      {
-        type   = "metric"
-        x      = 0
-        y      = 66
-        width  = 6
-        height = 3
-        properties = {
-          metrics = [
-            ["AWS/NetworkELB", "HealthyHostCount", "TargetGroup", aws_lb_target_group.turbo.arn_suffix, "LoadBalancer", aws_lb.nlb.arn_suffix, { stat = "Average" }]
-          ]
-          view    = "singleValue"
-          region  = var.aws_region
-          title   = "Healthy Turbo Targets"
-          period  = 60
-        }
-      },
-      {
-        type   = "metric"
-        x      = 6
-        y      = 66
-        width  = 6
-        height = 3
-        properties = {
-          metrics = [
-            ["AWS/NetworkELB", "UnHealthyHostCount", "TargetGroup", aws_lb_target_group.turbo.arn_suffix, "LoadBalancer", aws_lb.nlb.arn_suffix, { stat = "Average" }]
-          ]
-          view    = "singleValue"
-          region  = var.aws_region
-          title   = "Unhealthy Turbo Targets"
-          period  = 60
-        }
-      },
-      {
-        type   = "metric"
-        x      = 12
-        y      = 66
-        width  = 12
-        height = 3
-        properties = {
-          metrics = [
-            ["AWS/NetworkELB", "ActiveFlowCount", "LoadBalancer", aws_lb.nlb.arn_suffix, { stat = "Average" }]
-          ]
-          view    = "singleValue"
-          region  = var.aws_region
-          title   = "NLB Active Flows"
-          period  = 300
-        }
-      },
-      {
-        type   = "metric"
-        x      = 0
-        y      = 69
-        width  = 12
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/NetworkELB", "ActiveFlowCount", "LoadBalancer", aws_lb.nlb.arn_suffix, { stat = "Average", label = "Active Flows" }],
-            [".", "NewFlowCount", ".", ".", { stat = "Sum", label = "New Flows" }]
-          ]
-          view    = "timeSeries"
-          stacked = false
-          region  = var.aws_region
-          title   = "NLB (Turbo) - Connection Flows"
-          period  = 300
-          yAxis = {
-            left = { min = 0 }
-          }
-        }
-      },
-      {
-        type   = "metric"
-        x      = 12
-        y      = 69
-        width  = 12
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/NetworkELB", "ProcessedBytes", "LoadBalancer", aws_lb.nlb.arn_suffix, { stat = "Sum", label = "Processed Bytes" }]
-          ]
-          view    = "timeSeries"
-          stacked = false
-          region  = var.aws_region
-          title   = "NLB (Turbo) - Processed Bytes"
-          period  = 300
-          yAxis = {
-            left = { min = 0 }
-          }
-        }
-      },
-      # ========================================================================
-      # ROW 10: NAT GATEWAY (if enabled)
-      # ========================================================================
-      {
-        type   = "metric"
-        x      = 0
-        y      = 75
-        width  = 12
-        height = 6
-        properties = {
-          metrics = concat(
-            var.enable_nat_gateway ? [
-              ["AWS/NATGateway", "BytesInFromSource", "NatGatewayId", aws_nat_gateway.main[0].id, { stat = "Sum", label = "Bytes In", color = "#1f77b4" }],
-              [".", "BytesOutToDestination", ".", ".", { stat = "Sum", label = "Bytes Out", color = "#ff7f0e" }]
-            ] : []
-          )
-          view    = "timeSeries"
-          stacked = true
-          region  = var.aws_region
-          title   = "NAT Gateway - Traffic (Stacked)"
-          period  = 300
-          yAxis = {
-            left = { min = 0 }
-          }
-        }
-      },
-      {
-        type   = "metric"
-        x      = 12
-        y      = 75
-        width  = 12
-        height = 6
-        properties = {
-          metrics = concat(
-            var.enable_nat_gateway ? [
-              ["AWS/NATGateway", "ActiveConnectionCount", "NatGatewayId", aws_nat_gateway.main[0].id, { stat = "Sum", label = "Active Connections" }],
-              [".", "ErrorPortAllocation", ".", ".", { stat = "Sum", label = "Port Allocation Errors", color = "#d62728" }]
-            ] : []
-          )
-          view    = "timeSeries"
-          stacked = false
-          region  = var.aws_region
-          title   = "NAT Gateway - Connections & Errors"
-          period  = 300
-          yAxis = {
-            left = { min = 0 }
-          }
-        }
-      }
+      { type = "text", x = 0, y = 0, width = 24, height = 1, properties = { markdown = "# Application Layer - ALB & Web ASG" } },
+      { type = "metric", x = 0, y = 1, width = 6, height = 3, properties = { metrics = [["AWS/ApplicationELB", "RequestCount", "LoadBalancer", aws_lb.alb.arn_suffix, { stat = "Sum" }]], view = "singleValue", region = var.aws_region, title = "Total Requests", period = 300 } },
+      { type = "metric", x = 6, y = 1, width = 6, height = 3, properties = { metrics = [["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", aws_lb.alb.arn_suffix, { stat = "Average" }]], view = "singleValue", region = var.aws_region, title = "Avg Latency (sec)", period = 300 } },
+      { type = "metric", x = 12, y = 1, width = 6, height = 3, properties = { metrics = [["AWS/ApplicationELB", "HealthyHostCount", "TargetGroup", aws_lb_target_group.web.arn_suffix, "LoadBalancer", aws_lb.alb.arn_suffix, { stat = "Average" }]], view = "singleValue", region = var.aws_region, title = "Healthy Targets", period = 60 } },
+      { type = "metric", x = 18, y = 1, width = 6, height = 3, properties = { metrics = [["AWS/EC2", "CPUUtilization", "AutoScalingGroupName", aws_autoscaling_group.web.name, { stat = "Average" }]], view = "singleValue", region = var.aws_region, title = "Web ASG CPU %", period = 300 } },
+      { type = "metric", x = 0, y = 4, width = 12, height = 5, properties = { metrics = [["AWS/ApplicationELB", "HTTPCode_ELB_5XX_Count", "LoadBalancer", aws_lb.alb.arn_suffix, { stat = "Sum", label = "ALB 5XX", color = "#d62728" }], [".", "HTTPCode_Target_5XX_Count", ".", ".", { stat = "Sum", label = "Target 5XX", color = "#ff7f0e" }]], view = "timeSeries", stacked = true, region = var.aws_region, title = "5XX Errors (Stacked Area)", period = 300 } },
+      { type = "metric", x = 12, y = 4, width = 12, height = 5, properties = { metrics = [["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", aws_lb.alb.arn_suffix, { stat = "p90", label = "p90" }], ["...", { stat = "p99", label = "p99" }]], view = "timeSeries", region = var.aws_region, title = "ALB Latency (p90, p99)", period = 300 } },
+      { type = "metric", x = 0, y = 9, width = 24, height = 5, properties = { metrics = [["AWS/EC2", "CPUUtilization", "AutoScalingGroupName", aws_autoscaling_group.web.name, { stat = "Average", label = "Web ASG Avg", color = "#1f77b4" }], ["...", { stat = "Maximum", label = "Web ASG Max", color = "#aec7e8" }], ["AWS/EC2", "CPUUtilization", "AutoScalingGroupName", aws_autoscaling_group.turbo.name, { stat = "Average", label = "Turbo ASG Avg", color = "#ff7f0e" }], ["...", { stat = "Maximum", label = "Turbo ASG Max", color = "#ffbb78" }]], view = "timeSeries", region = var.aws_region, title = "CPU Utilization by ASG", period = 300, yAxis = { left = { min = 0, max = 100 } } } }
+    ]
+  })
+}
+
+# Dashboard 2: Database Layer (RDS)
+resource "aws_cloudwatch_dashboard" "database" {
+  count          = var.enable_cloudwatch_dashboard ? 1 : 0
+  dashboard_name = "${var.project_name}-database"
+
+  dashboard_body = jsonencode({
+    widgets = [
+      { type = "text", x = 0, y = 0, width = 24, height = 1, properties = { markdown = "# Database Layer - RDS PostgreSQL" } },
+      { type = "metric", x = 0, y = 1, width = 6, height = 3, properties = { metrics = [["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average" }]], view = "singleValue", region = var.aws_region, title = "RDS CPU %", period = 300 } },
+      { type = "metric", x = 6, y = 1, width = 6, height = 3, properties = { metrics = [["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average" }]], view = "singleValue", region = var.aws_region, title = "Connections", period = 300 } },
+      { type = "metric", x = 12, y = 1, width = 6, height = 3, properties = { metrics = [["AWS/RDS", "FreeStorageSpace", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average" }]], view = "singleValue", region = var.aws_region, title = "Free Storage (bytes)", period = 300 } },
+      { type = "metric", x = 18, y = 1, width = 6, height = 3, properties = { metrics = [["AWS/RDS", "FreeableMemory", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average" }]], view = "singleValue", region = var.aws_region, title = "Free Memory (bytes)", period = 300 } },
+      { type = "metric", x = 0, y = 4, width = 12, height = 5, properties = { metrics = [["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average", label = "CPU %" }]], view = "timeSeries", region = var.aws_region, title = "RDS CPU Utilization", period = 300, yAxis = { left = { min = 0, max = 100 } } } },
+      { type = "metric", x = 12, y = 4, width = 12, height = 5, properties = { metrics = [["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average" }]], view = "timeSeries", region = var.aws_region, title = "Active Connections", period = 300 } },
+      { type = "metric", x = 0, y = 9, width = 12, height = 5, properties = { metrics = [["AWS/RDS", "ReadIOPS", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average", label = "Read", color = "#1f77b4" }], [".", "WriteIOPS", ".", ".", { stat = "Average", label = "Write", color = "#ff7f0e" }]], view = "timeSeries", stacked = true, region = var.aws_region, title = "IOPS (Stacked Area)", period = 300 } },
+      { type = "metric", x = 12, y = 9, width = 12, height = 5, properties = { metrics = [["AWS/RDS", "ReadLatency", "DBInstanceIdentifier", aws_db_instance.main.identifier, { stat = "Average", label = "Read" }], [".", "WriteLatency", ".", ".", { stat = "Average", label = "Write" }]], view = "timeSeries", region = var.aws_region, title = "Latency (seconds)", period = 300 } }
+    ]
+  })
+}
+
+# Dashboard 3: Cache Layer (ElastiCache)
+resource "aws_cloudwatch_dashboard" "cache" {
+  count          = var.enable_cloudwatch_dashboard ? 1 : 0
+  dashboard_name = "${var.project_name}-cache"
+
+  dashboard_body = jsonencode({
+    widgets = [
+      { type = "text", x = 0, y = 0, width = 24, height = 1, properties = { markdown = "# Cache Layer - ElastiCache Valkey" } },
+      { type = "metric", x = 0, y = 1, width = 6, height = 3, properties = { metrics = [["AWS/ElastiCache", "CPUUtilization", "CacheClusterId", "${aws_elasticache_replication_group.main.replication_group_id}-001", { stat = "Average" }]], view = "singleValue", region = var.aws_region, title = "CPU %", period = 300 } },
+      { type = "metric", x = 6, y = 1, width = 6, height = 3, properties = { metrics = [["AWS/ElastiCache", "DatabaseMemoryUsagePercentage", "CacheClusterId", "${aws_elasticache_replication_group.main.replication_group_id}-001", { stat = "Average" }]], view = "singleValue", region = var.aws_region, title = "Memory %", period = 300 } },
+      { type = "metric", x = 12, y = 1, width = 6, height = 3, properties = { metrics = [["AWS/ElastiCache", "CacheHitRate", "CacheClusterId", "${aws_elasticache_replication_group.main.replication_group_id}-001", { stat = "Average" }]], view = "singleValue", region = var.aws_region, title = "Hit Rate %", period = 300 } },
+      { type = "metric", x = 18, y = 1, width = 6, height = 3, properties = { metrics = [["AWS/ElastiCache", "Evictions", "CacheClusterId", "${aws_elasticache_replication_group.main.replication_group_id}-001", { stat = "Sum" }]], view = "singleValue", region = var.aws_region, title = "Evictions", period = 300 } },
+      { type = "metric", x = 0, y = 4, width = 12, height = 5, properties = { metrics = [["AWS/ElastiCache", "CacheHits", "CacheClusterId", "${aws_elasticache_replication_group.main.replication_group_id}-001", { stat = "Sum", label = "Hits", color = "#2ca02c" }], [".", "CacheMisses", ".", ".", { stat = "Sum", label = "Misses", color = "#d62728" }]], view = "timeSeries", stacked = true, region = var.aws_region, title = "Cache Hits vs Misses (Stacked)", period = 300 } },
+      { type = "metric", x = 12, y = 4, width = 12, height = 5, properties = { metrics = [["AWS/ElastiCache", "DatabaseMemoryUsagePercentage", "CacheClusterId", "${aws_elasticache_replication_group.main.replication_group_id}-001", { stat = "Average" }]], view = "timeSeries", region = var.aws_region, title = "Memory Usage %", period = 300, yAxis = { left = { min = 0, max = 100 } } } },
+      { type = "metric", x = 0, y = 9, width = 12, height = 5, properties = { metrics = [["AWS/ElastiCache", "Evictions", "CacheClusterId", "${aws_elasticache_replication_group.main.replication_group_id}-001", { stat = "Sum" }]], view = "timeSeries", region = var.aws_region, title = "Evictions Over Time", period = 300 } },
+      { type = "metric", x = 12, y = 9, width = 12, height = 5, properties = { metrics = [["AWS/ElastiCache", "ReplicationLag", "CacheClusterId", "${aws_elasticache_replication_group.main.replication_group_id}-001", { stat = "Average" }]], view = "timeSeries", region = var.aws_region, title = "Replication Lag (sec)", period = 60 } }
+    ]
+  })
+}
+
+# Dashboard 4: Network Layer (NLB)
+resource "aws_cloudwatch_dashboard" "network" {
+  count          = var.enable_cloudwatch_dashboard ? 1 : 0
+  dashboard_name = "${var.project_name}-network"
+
+  dashboard_body = jsonencode({
+    widgets = [
+      { type = "text", x = 0, y = 0, width = 24, height = 1, properties = { markdown = "# Network Layer - NLB & Turbo Execution" } },
+      { type = "metric", x = 0, y = 1, width = 8, height = 3, properties = { metrics = [["AWS/NetworkELB", "HealthyHostCount", "TargetGroup", aws_lb_target_group.turbo.arn_suffix, "LoadBalancer", aws_lb.nlb.arn_suffix, { stat = "Average" }]], view = "singleValue", region = var.aws_region, title = "Healthy Turbo Targets", period = 60 } },
+      { type = "metric", x = 8, y = 1, width = 8, height = 3, properties = { metrics = [["AWS/NetworkELB", "UnHealthyHostCount", "TargetGroup", aws_lb_target_group.turbo.arn_suffix, "LoadBalancer", aws_lb.nlb.arn_suffix, { stat = "Average" }]], view = "singleValue", region = var.aws_region, title = "Unhealthy Turbo Targets", period = 60 } },
+      { type = "metric", x = 16, y = 1, width = 8, height = 3, properties = { metrics = [["AWS/NetworkELB", "ActiveFlowCount", "LoadBalancer", aws_lb.nlb.arn_suffix, { stat = "Average" }]], view = "singleValue", region = var.aws_region, title = "Active Flows", period = 300 } },
+      { type = "metric", x = 0, y = 4, width = 12, height = 5, properties = { metrics = [["AWS/NetworkELB", "ActiveFlowCount", "LoadBalancer", aws_lb.nlb.arn_suffix, { stat = "Average", label = "Active" }], [".", "NewFlowCount", ".", ".", { stat = "Sum", label = "New" }]], view = "timeSeries", region = var.aws_region, title = "NLB Connection Flows", period = 300 } },
+      { type = "metric", x = 12, y = 4, width = 12, height = 5, properties = { metrics = [["AWS/NetworkELB", "ProcessedBytes", "LoadBalancer", aws_lb.nlb.arn_suffix, { stat = "Sum" }]], view = "timeSeries", region = var.aws_region, title = "NLB Processed Bytes", period = 300 } }
+    ]
+  })
+}
+
+# Dashboard 5: Alarms Overview - ALL ALARMS
+resource "aws_cloudwatch_dashboard" "alarms_overview" {
+  count          = var.enable_cloudwatch_dashboard ? 1 : 0
+  dashboard_name = "${var.project_name}-alarms-overview"
+
+  dashboard_body = jsonencode({
+    widgets = [
+      { type = "text", x = 0, y = 0, width = 24, height = 1, properties = { markdown = "# Alarms - Complete Inventory (${length(local.all_alarm_arns)} Total)" } },
+      { type = "alarm", x = 0, y = 1, width = 24, height = 10, properties = { title = "All Configured Alarms", alarms = local.all_alarm_arns } }
     ]
   })
 }

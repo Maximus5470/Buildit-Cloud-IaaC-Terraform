@@ -97,14 +97,14 @@ variable "db_name" {
 variable "db_username" {
   description = "Master username for RDS (only needed for initial setup)"
   type        = string
-  default     = ""  # Only needed for initial setup, then stored in Secrets Manager
+  default     = "" # Only needed for initial setup, then stored in Secrets Manager
   sensitive   = true
 }
 
 variable "db_password" {
   description = "Master password for RDS (only needed for initial setup)"
   type        = string
-  default     = ""  # Only needed for initial setup, then stored in Secrets Manager
+  default     = "" # Only needed for initial setup, then stored in Secrets Manager
   sensitive   = true
 }
 
@@ -153,13 +153,13 @@ variable "enable_detailed_monitoring" {
 variable "peak_schedule_start" {
   description = "Cron expression for when to scale up to peak (UTC)"
   type        = string
-  default     = "30 4 * * 1-6"  # 04:00 UTC Monday-Saturday (9:30 AM IST)
+  default     = "30 4 * * 1-6" # 04:00 UTC Monday-Saturday (9:30 AM IST)
 }
 
 variable "peak_schedule_end" {
   description = "Cron expression for when to scale down from peak (UTC)"
   type        = string
-  default     = "30 11 * * 1-6"  # 11:30 UTC Monday-Saturday (5:00 PM IST)
+  default     = "30 11 * * 1-6" # 11:30 UTC Monday-Saturday (5:00 PM IST)
 }
 
 variable "enable_nat_gateway" {
