@@ -837,8 +837,9 @@ resource "aws_elasticache_replication_group" "main" {
 # ============================================================================
 
 resource "aws_secretsmanager_secret" "db_credentials" {
-  name        = "${var.project_name}-db-credentials"
-  description = "Database credentials for RDS PostgreSQL"
+  name                    = "${var.project_name}-db-credentials"
+  description             = "Database credentials for RDS PostgreSQL"
+  recovery_window_in_days = 0
 
   tags = {
     Name = "${var.project_name}-db-credentials"
