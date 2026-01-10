@@ -81,3 +81,43 @@ output "sns_topic_arn" {
   description = "ARN of the SNS topic for alerts"
   value       = aws_sns_topic.alerts.arn
 }
+
+# ============================================================================
+# VPC FLOW LOGS OUTPUTS
+# ============================================================================
+
+output "flow_logs_s3_bucket" {
+  description = "S3 bucket name for VPC Flow Logs"
+  value       = var.enable_vpc_flow_logs ? aws_s3_bucket.flow_logs[0].id : null
+}
+
+output "flow_logs_s3_arn" {
+  description = "S3 bucket ARN for VPC Flow Logs"
+  value       = var.enable_vpc_flow_logs ? aws_s3_bucket.flow_logs[0].arn : null
+}
+
+output "athena_workgroup" {
+  description = "Athena workgroup for querying Flow Logs"
+  value       = var.enable_vpc_flow_logs ? aws_athena_workgroup.flow_logs[0].name : null
+}
+
+output "glue_database" {
+  description = "Glue database for Flow Logs"
+  value       = var.enable_vpc_flow_logs ? aws_glue_catalog_database.flow_logs[0].name : null
+}
+
+output "flow_logs_query_guide" {
+  description = "Quick guide for querying Flow Logs"
+  value       = var.enable_vpc_flow_logs ? join("", [
+    "\n",
+    "VPC Flow Logs are now enabled!\n",
+    "\n",
+    "To query your flow logs:\n",
+    "1. Go to AWS Athena console\n",
+    "2. Select workgroup: ${aws_athena_workgroup.flow_logs[0].name}\n",
+    "3. Select database: ${aws_glue_catalog_database.flow_logs[0].name}\n",
+    "4. Run queries against table: vpc_flow_logs\n",
+    "\n",
+    "Example queries are available in the query_examples.sql file.\n"
+  ]) : null
+}

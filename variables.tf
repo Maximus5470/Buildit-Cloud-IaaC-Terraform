@@ -194,3 +194,27 @@ variable "enable_cloudwatch_dashboard" {
   type        = bool
   default     = true
 }
+
+# VPC Flow Logs Configuration
+variable "enable_vpc_flow_logs" {
+  description = "Enable VPC Flow Logs for network monitoring"
+  type        = bool
+  default     = true
+}
+
+variable "flow_logs_retention_days" {
+  description = "Number of days to retain flow logs in S3"
+  type        = number
+  default     = 90
+}
+
+variable "flow_logs_traffic_type" {
+  description = "Type of traffic to log (ACCEPT, REJECT, or ALL)"
+  type        = string
+  default     = "ALL"
+  
+  validation {
+    condition     = contains(["ACCEPT", "REJECT", "ALL"], var.flow_logs_traffic_type)
+    error_message = "Traffic type must be ACCEPT, REJECT, or ALL."
+  }
+}
