@@ -565,7 +565,23 @@ resource "aws_cloudwatch_dashboard" "network" {
   })
 }
 
-# Dashboard 5: Alarms Overview - ALL ALARMS
+# Dashboard 5: Security Layer (WAF)
+resource "aws_cloudwatch_dashboard" "security" {
+  count          = var.enable_cloudwatch_dashboard ? 1 : 0
+  dashboard_name = "${var.project_name}-security"
+
+  dashboard_body = jsonencode({
+    widgets = [
+      { type = "text", x = 0, y = 0, width = 24, height = 1, properties = { markdown = "# Security Layer - WAF & Shield" } },
+      { type = "metric", x = 0, y = 1, width = 6, height = 3, properties = { metrics = [["AWS/WAFV2", "BlockedRequests", "WebACL", "${var.project_name}-web-acl", "Region", var.aws_region, "Rule", "ALL", { stat = "Sum" }]], view = "singleValue", region = var.aws_region, title = "Blocked Requests", period = 300 } },
+      { type = "metric", x = 6, y = 1, width = 6, height = 3, properties = { metrics = [["AWS/WAFV2", "AllowedRequests", "WebACL", "${var.project_name}-web-acl", "Region", var.aws_region, "Rule", "ALL", { stat = "Sum" }]], view = "singleValue", region = var.aws_region, title = "Allowed Requests", period = 300 } },
+      { type = "metric", x = 12, y = 1, width = 12, height = 3, properties = { metrics = [["AWS/WAFV2", "BlockedRequests", "WebACL", "${var.project_name}-web-acl", "Region", var.aws_region, "Rule", "RateLimit", { stat = "Sum", label = "Rate Limited" }]], view = "singleValue", region = var.aws_region, title = "DDoS Blocks (Rate Limit)", period = 300 } },
+      { type = "metric", x = 0, y = 4, width = 24, height = 6, properties = { metrics = [["AWS/WAFV2", "BlockedRequests", "WebACL", "${var.project_name}-web-acl", "Region", var.aws_region, "Rule", "AWS-AWSManagedRulesCommonRuleSet", { stat = "Sum", label = "Common Rules" }], ["...", "Rule", "AWS-AWSManagedRulesKnownBadInputsRuleSet", { stat = "Sum", label = "Bad Inputs" }], ["...", "Rule", "AWS-AWSManagedRulesAmazonIpReputationList", { stat = "Sum", label = "IP Reputation" }], ["...", "Rule", "AWS-AWSManagedRulesLinuxRuleSet", { stat = "Sum", label = "Linux Exploits" }], ["...", "Rule", "RateLimit", { stat = "Sum", label = "Rate Limit" }]], view = "timeSeries", region = var.aws_region, title = "Blocked Requests by Rule Group", period = 300, yAxis = { left = { min = 0 } } } }
+    ]
+  })
+}
+
+# Dashboard 6: Alarms Overview - ALL ALARMS
 resource "aws_cloudwatch_dashboard" "alarms_overview" {
   count          = var.enable_cloudwatch_dashboard ? 1 : 0
   dashboard_name = "${var.project_name}-alarms-overview"
