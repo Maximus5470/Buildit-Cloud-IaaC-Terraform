@@ -343,15 +343,15 @@ resource "aws_security_group_rule" "rds_ingress_web" {
   security_group_id        = aws_security_group.rds.id
 }
 
-resource "aws_security_group_rule" "rds_egress_all" {
-  type              = "egress"
-  from_port         = 0
-  to_port           = 0
-  protocol          = "-1"
-  cidr_blocks       = ["0.0.0.0/0"]
-  description       = "No outbound required"
-  security_group_id = aws_security_group.rds.id
-}
+# resource "aws_security_group_rule" "rds_egress_all" {
+#   type              = "egress"
+#   from_port         = 0
+#   to_port           = 0
+#   protocol          = "-1"
+#   cidr_blocks       = ["0.0.0.0/0"]
+#   description       = "No outbound required"
+#   security_group_id = aws_security_group.rds.id
+# }
 
 # ElastiCache Rules
 resource "aws_security_group_rule" "elasticache_ingress_web" {
@@ -631,6 +631,35 @@ resource "aws_autoscaling_schedule" "web_scale_down" {
   autoscaling_group_name = aws_autoscaling_group.web.name
 }
 
+# Target Tracking Scaling for Web - CPU Utilization
+resource "aws_autoscaling_policy" "web_cpu_target" {
+  name                   = "${var.project_name}-web-cpu-target"
+  autoscaling_group_name = aws_autoscaling_group.web.name
+  policy_type            = "TargetTrackingScaling"
+
+  target_tracking_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ASGAverageCPUUtilization"
+    }
+    target_value = 70.0
+  }
+}
+
+# Target Tracking Scaling for Web - ALB Request Count Per Target
+resource "aws_autoscaling_policy" "web_request_count_target" {
+  name                   = "${var.project_name}-web-request-count-target"
+  autoscaling_group_name = aws_autoscaling_group.web.name
+  policy_type            = "TargetTrackingScaling"
+
+  target_tracking_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ALBRequestCountPerTarget"
+      resource_label         = "${aws_lb.alb.arn_suffix}/${aws_lb_target_group.web.arn_suffix}"
+    }
+    target_value = 500.0
+  }
+}
+
 # Launch Template for Turbo EC2 Instances
 resource "aws_launch_template" "turbo" {
   name_prefix   = "${var.project_name}-turbo-"
@@ -750,6 +779,20 @@ resource "aws_autoscaling_schedule" "turbo_scale_down" {
   autoscaling_group_name = aws_autoscaling_group.turbo.name
 }
 
+# Target Tracking Scaling for Turbo - CPU Utilization
+resource "aws_autoscaling_policy" "turbo_cpu_target" {
+  name                   = "${var.project_name}-turbo-cpu-target"
+  autoscaling_group_name = aws_autoscaling_group.turbo.name
+  policy_type            = "TargetTrackingScaling"
+
+  target_tracking_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ASGAverageCPUUtilization"
+    }
+    target_value = 70.0
+  }
+}
+
 # ============================================================================
 # RDS POSTGRESQL
 # ============================================================================
@@ -784,7 +827,7 @@ resource "aws_db_instance" "main" {
   multi_az                = true
   publicly_accessible     = false
   backup_retention_period = 30
-  skip_final_snapshot     = true
+  skip_final_snapshot     = false
 
   tags = {
     Name = "${var.project_name}-rds"
